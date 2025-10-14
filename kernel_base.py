@@ -40,7 +40,7 @@ NOME_ARQUIVO_DISCO = "disco.bin" # Arquivo que simulará nosso disco
 QUANTUM_RR = 4                   # Número de instruções por fatia de tempo para o Round-Robin
 
 # ================================================================================
-# 2. DEFINIÇÃO DAS ESTRUTURAS DE DADOS CENTRAIS (PCB, TCB, ESTADOS)
+# 2. DEFINIÇÃO DAS ESTRUTURAS DE DADOS CENTRAIS
 # ================================================================================
 
 class EstadoProcesso(Enum):
@@ -61,7 +61,7 @@ class thread:
     registradores: dict = field(default_factory=dict)
 
 @dataclass
-class process:
+class processo:
     """ Representa um processo. """
     pid: int
     nome_programa: str
@@ -150,10 +150,10 @@ class CPU:
         else:
             print("[CPU] Ociosa.")
             
-    def carregar_contexto(self, pcb):
-        self.processo_atual = pcb
-        self.pc = pcb.contador_de_programa
-        self.registradores = pcb.registradores.copy()
+    def carregar_contexto(self, processo):
+        self.processo_atual = processo
+        self.pc = processo.contador_de_programa
+        self.registradores = processo.registradores.copy()
         
     def salvar_contexto(self):
         if self.processo_atual:
@@ -161,7 +161,7 @@ class CPU:
             self.processo_atual.registradores = self.registradores.copy()
 
 # ================================================================================
-# 4. CLASSE PRINCIPAL DO KERNEL (AQUI ENTRAM AS IMPLEMENTAÇÕES DAS EQUIPES)
+# 4. CLASSE PRINCIPAL DO KERNEL
 # ================================================================================
 
 class Kernel:
@@ -176,18 +176,16 @@ class Kernel:
         self.fila_de_prontos = deque()
         self.fila_de_bloqueados = {}
         self.quantum_restante = QUANTUM_RR
-        self.proximo_pid = 0
-
-        # Módulos do SO (serão as funções implementadas pelas equipes)
+        self.proximo_pid = 1
         self.rodando = False
         print("[Kernel] Núcleo do SO inicializado.")
     
-    # --- Funções do Núcleo (NÃO MODIFICAR) ---
+    # --- Funções do Núcleo ---
     def bootstrap(self):
         """ Prepara o SO para execução, criando o primeiro processo 'init'. """
         print("[Kernel] Sistema operacional inicializando (bootstrap)...")
         # Exemplo: cria um processo inicial para que o sistema não comece vazio
-        self.sys_create_process("init")
+        self.criar_processo("init")
         self.rodando = True
         print("[Kernel] Bootstrap concluído.")
 
@@ -203,7 +201,7 @@ class Kernel:
             colocar_de_volta_na_fila = processo_saindo is not None and processo_saindo.estado == EstadoProcesso.EXECUCAO
 
             # Chama o escalonador para decidir quem será o próximo
-            proximo_processo = self.schedule_rr(processo_saindo, colocar_de_volta_na_fila)
+            proximo_processo = self.escalonamento_rr(processo_saindo, colocar_de_volta_na_fila)
             
             if proximo_processo:
                 # Salva o contexto do processo que estava saindo
@@ -227,7 +225,7 @@ class Kernel:
     # ============================================================================
 
     # --- Equipe 1: Criação e Encerramento de Processos ---
-    def sys_create_process(self, nome_programa):
+    def criar_processo(self, nome_programa):
         """
         Responsável por criar um novo processo.
         - Deve gerar um PID único.
@@ -238,15 +236,16 @@ class Kernel:
         """
         # A EQUIPE 1 DEVE IMPLEMENTAR ESTA FUNÇÃO
         print(f"[Kernel] AINDA NÃO IMPLEMENTADO: Criar processo '{nome_programa}'.")
+        
         # Exemplo básico para o bootstrap funcionar:
         pid = self.proximo_pid
         self.proximo_pid += 1
-        pcb = process(pid=pid, nome_programa=nome_programa, estado=EstadoProcesso.PRONTO)
-        self.tabela_de_processos[pid] = pcb
-        self.fila_de_prontos.append(pcb)
+        processo_novo = processo(pid=pid, nome_programa=nome_programa, estado=EstadoProcesso.PRONTO)
+        self.tabela_de_processos[pid] = processo_novo
+        self.fila_de_prontos.append(processo_novo)
         return pid
         
-    def sys_terminate_process(self, pid):
+    def encerrar_processo(self, pid):
         """
         Responsável por encerrar um processo.
         - Deve mudar o estado para TERMINADO.
@@ -258,7 +257,7 @@ class Kernel:
         pass
 
     # --- Equipe 2: Comunicação (Memória Compartilhada) ---
-    def sys_shm_create(self, tamanho):
+    def criar_memoria_compartilhada(self, tamanho):
         """
         Cria uma nova região de memória compartilhada.
         - Deve alocar um bloco na RAM (pode usar a função da Equipe 6).
@@ -268,7 +267,7 @@ class Kernel:
         pass
 
     # --- Equipe 3: Comunicação (Troca de Mensagens) ---
-    def sys_msg_send(self, dest_pid, mensagem):
+    def enviar_mensagem(self, dest_pid, mensagem):
         """
         Envia uma mensagem para outro processo.
         - Deve localizar o buffer de mensagens do destinatário.
@@ -278,7 +277,7 @@ class Kernel:
         # A EQUIPE 3 DEVE IMPLEMENTAR ESTA FUNÇÃO
         pass
     
-    def sys_msg_receive(self, pid):
+    def receber_mensagem(self, pid):
         """
         Recebe uma mensagem.
         - Se houver mensagem, retorna-a.
@@ -288,7 +287,7 @@ class Kernel:
         pass
 
     # --- Equipe 4: Criação e Encerramento de Threads ---
-    def sys_create_thread(self, pid, funcao_inicio):
+    def criar_thread(self, pid, funcao_inicio):
         """
         Cria uma nova thread dentro de um processo existente.
         - Deve gerar um TID único para o processo.
@@ -299,7 +298,7 @@ class Kernel:
         pass
 
     # --- Equipe 5: Escalonamento de Processos (Round-Robin) ---
-    def schedule_rr(self, processo_saindo, colocar_de_volta_na_fila):
+    def escalonamento_rr(self, processo_saindo, colocar_de_volta_na_fila):
         """
         Implementa o algoritmo de escalonamento Round-Robin.
         - É chamado pelo loop principal a cada "instrução".
@@ -309,7 +308,7 @@ class Kernel:
         """
         # A EQUIPE 5 DEVE IMPLEMENTAR ESTA FUNÇÃO
         
-        # Lógica de placeholder para o sistema rodar:
+        # Código básico para o sistema rodar:
         if self.quantum_restante <= 0 or (processo_saindo and processo_saindo.estado != EstadoProcesso.EXECUCAO):
             if colocar_de_volta_na_fila:
                 processo_saindo.estado = EstadoProcesso.PRONTO
@@ -322,7 +321,7 @@ class Kernel:
         return processo_saindo # Continua executando o mesmo processo
         
     # --- Equipe 6: Alocação e Liberação de Memória Física ---
-    def sys_malloc(self, tamanho):
+    def alocar_memoria(self, tamanho):
         """
         Aloca um bloco de memória contígua na RAM.
         - Deve implementar um algoritmo como First-Fit ou Best-Fit.
@@ -332,7 +331,7 @@ class Kernel:
         # A EQUIPE 6 DEVE IMPLEMENTAR ESTA FUNÇÃO
         pass
     
-    def sys_free(self, endereco):
+    def liberar_memoria(self, endereco):
         """
         Libera um bloco de memória.
         - Deve marcar o bloco como livre e tentar fundi-lo com vizinhos livres.
@@ -341,7 +340,7 @@ class Kernel:
         pass
     
     # --- Equipe 7: Gerenciamento de Memória Virtual ---
-    def vm_translate_address(self, pid, endereco_logico):
+    def traduzir_endereco_logico(self, pid, endereco_logico):
         """
         Traduz um endereço lógico de um processo para um endereço físico na RAM.
         - Deve usar a tabela de páginas do processo.
@@ -352,18 +351,18 @@ class Kernel:
         pass
     
     # --- Equipe 8: Gerenciamento de Arquivos ---
-    def sys_create_file(self, nome):
+    def criar_arquivo(self, nome):
         """ Cria um arquivo vazio no disco. """
         # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
         pass
     
-    def sys_write_file(self, nome, dados):
+    def escrever_em_arquivo(self, nome, dados):
         """ Escreve dados em um arquivo. """
         # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
         pass
 
     # --- Equipe 9: Interpretador de Comandos ---
-    def shell_parse_and_execute(self, comando_str):
+    def interpretador_de_comandos(self, comando_str):
         """
         Interpreta um comando do usuário e chama a função de sistema correspondente.
         - Deve fazer o parsing da string de comando.
@@ -374,7 +373,7 @@ class Kernel:
         pass
         
     # --- Equipe 10: Listagem de Processos (htop) ---
-    def sys_htop(self):
+    def listagem_de_processos(self):
         """
         Gera uma string formatada com a lista de todos os processos e seus estados.
         - Deve varrer a tabela de processos.
@@ -383,14 +382,10 @@ class Kernel:
         - Retorna a string. Não deve usar print().
         """
         # A EQUIPE 10 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        output = "PID\tNOME\t\tESTADO\n"
-        output += "---\t----\t\t------\n"
-        for pid, pcb in self.tabela_de_processos.items():
-            output += f"{pcb.pid}\t{pcb.nome_programa[:12]}\t\t{pcb.estado.value}\n"
-        return output
+        pass
 
 # ================================================================================
-# 5. PONTO DE ENTRADA PRINCIPAL DA SIMULAÇÃO (NÃO MODIFICAR)
+# 5. PONTO DE ENTRADA PRINCIPAL DA SIMULAÇÃO
 # ================================================================================
 
 if __name__ == "__main__":
@@ -399,11 +394,6 @@ if __name__ == "__main__":
     
     # Inicia o sistema operacional
     kernel_so.bootstrap()
-    
-    # Exemplo de como o shell interagiria com o kernel (a Equipe 9 faria isso em um loop)
-    print("\n[Simulação] Exemplo de uso do 'htop':")
-    lista_processos = kernel_so.sys_htop()
-    print(lista_processos)
     
     # Inicia o loop principal de execução do SO
     kernel_so.loop_principal()
