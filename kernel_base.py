@@ -8,20 +8,9 @@
     Este arquivo define a arquitetura central do Sistema Operacional Simulado, incluindo
     o hardware (CPU, RAM, Disco) e o núcleo do Kernel.
 
-    Cada equipe deve focar em implementar a sua função em um arquivo separado que será 
-    importado para este módulo.
+    Cada equipe deve focar em implementar a sua função designada DENTRO desta
+    classe Kernel, nos locais indicados com "A EQUIPE X DEVE IMPLEMENTAR...".
 """
-
-from equipe_1 import *
-from equipe_2 import *
-from equipe_3 import *
-from equipe_4 import *
-from equipe_5 import *
-from equipe_6 import *
-from equipe_7 import *
-from equipe_8 import *
-from equipe_9 import *
-from equipe_10 import *
 
 import os
 import time
@@ -33,14 +22,14 @@ from dataclasses import dataclass, field
 # 1. CONSTANTES DE CONFIGURAÇÃO DO HARDWARE E DO KERNEL
 # ================================================================================
 
-TAMANHO_RAM_BYTES = 4096         # 4 KB de memória RAM
-TAMANHO_BLOCO_DISCO_BYTES = 128  # Cada bloco no disco terá 128 bytes
-NUM_BLOCOS_DISCO = 256           # Nosso disco terá 256 blocos (total 32 KB)
-NOME_ARQUIVO_DISCO = "disco.bin" # Arquivo que simulará nosso disco
-QUANTUM_RR = 4                   # Número de instruções por fatia de tempo para o Round-Robin
+TAMANHO_RAM_BYTES = 4096            # 4 KB de memória RAM
+TAMANHO_BLOCO_DISCO_BYTES = 128     # Cada bloco no disco terá 128 bytes
+NUM_BLOCOS_DISCO = 256              # Nosso disco terá 256 blocos (total 32 KB)
+NOME_ARQUIVO_DISCO = "disco.bin"    # Arquivo que simulará nosso disco
+QUANTUM_RR = 4                      # Número de instruções por fatia de tempo para o Round-Robin
 
 # ================================================================================
-# 2. DEFINIÇÃO DAS ESTRUTURAS DE DADOS CENTRAIS
+# 2. DEFINIÇÃO DAS ESTRUTURAS DE DADOS CENTRAIS (PCB, TCB, ESTADOS)
 # ================================================================================
 
 class EstadoProcesso(Enum):
@@ -52,8 +41,8 @@ class EstadoProcesso(Enum):
     TERMINADO = "TERMINADO"
 
 @dataclass
-class thread:
-    """ Representa uma thread. """
+class TCB:
+    """ Thread Control Block (TCB): Representa uma thread. """
     tid: int
     pid_pai: int
     estado: EstadoProcesso
@@ -61,8 +50,8 @@ class thread:
     registradores: dict = field(default_factory=dict)
 
 @dataclass
-class processo:
-    """ Representa um processo. """
+class PCB:
+    """ Process Control Block (PCB): Representa um processo. """
     pid: int
     nome_programa: str
     estado: EstadoProcesso
@@ -70,7 +59,7 @@ class processo:
     contador_de_programa: int = 0
     registradores: dict = field(default_factory=dict)
     # Cada processo tem sua própria lista de threads
-    threads: list[thread] = field(default_factory=list)
+    threads: list[TCB] = field(default_factory=list)
     # Informações de memória
     endereco_base_memoria: int = -1
     tamanho_memoria: int = 0
@@ -150,10 +139,10 @@ class CPU:
         else:
             print("[CPU] Ociosa.")
             
-    def carregar_contexto(self, processo):
-        self.processo_atual = processo
-        self.pc = processo.contador_de_programa
-        self.registradores = processo.registradores.copy()
+    def carregar_contexto(self, pcb):
+        self.processo_atual = pcb
+        self.pc = pcb.contador_de_programa
+        self.registradores = pcb.registradores.copy()
         
     def salvar_contexto(self):
         if self.processo_atual:
@@ -161,7 +150,7 @@ class CPU:
             self.processo_atual.registradores = self.registradores.copy()
 
 # ================================================================================
-# 4. CLASSE PRINCIPAL DO KERNEL
+# 4. CLASSE PRINCIPAL DO KERNEL (AQUI ENTRAM AS IMPLEMENTAÇÕES DAS EQUIPES)
 # ================================================================================
 
 class Kernel:
@@ -176,7 +165,9 @@ class Kernel:
         self.fila_de_prontos = deque()
         self.fila_de_bloqueados = {}
         self.quantum_restante = QUANTUM_RR
-        self.proximo_pid = 1
+        self.proximo_pid = 1 # PID 0 pode ser reservado para o 'init' ou 'idle'
+
+        # Módulos do SO (serão as funções implementadas pelas equipes)
         self.rodando = False
         print("[Kernel] Núcleo do SO inicializado.")
     
@@ -185,7 +176,7 @@ class Kernel:
         """ Prepara o SO para execução, criando o primeiro processo 'init'. """
         print("[Kernel] Sistema operacional inicializando (bootstrap)...")
         # Exemplo: cria um processo inicial para que o sistema não comece vazio
-        self.criar_processo("init")
+        self.sys_create_process("init")
         self.rodando = True
         print("[Kernel] Bootstrap concluído.")
 
@@ -201,11 +192,12 @@ class Kernel:
             colocar_de_volta_na_fila = processo_saindo is not None and processo_saindo.estado == EstadoProcesso.EXECUCAO
 
             # Chama o escalonador para decidir quem será o próximo
-            proximo_processo = self.escalonamento_rr(processo_saindo, colocar_de_volta_na_fila)
+            proximo_processo = self.schedule_rr(processo_saindo, colocar_de_volta_na_fila)
             
             if proximo_processo:
-                # Salva o contexto do processo que estava saindo
-                self.cpu.salvar_contexto()
+                # Salva o contexto do processo que estava saindo (se houver um)
+                if processo_saindo:
+                    self.cpu.salvar_contexto()
                 
                 # Carrega o contexto do novo processo
                 self.cpu.carregar_contexto(proximo_processo)
@@ -213,6 +205,11 @@ class Kernel:
                 
                 # Reinicia o quantum para o novo processo
                 self.quantum_restante = QUANTUM_RR
+            
+            elif processo_saindo and not proximo_processo:
+                # Caso onde o último processo terminou/bloqueou e não há mais ninguém pronto
+                self.cpu.salvar_contexto()
+                self.cpu.processo_atual = None # Garante que a CPU fique ociosa
                 
             # Executa uma instrução na CPU
             self.cpu.executar_instrucao()
@@ -225,7 +222,7 @@ class Kernel:
     # ============================================================================
 
     # --- Equipe 1: Criação e Encerramento de Processos ---
-    def criar_processo(self, nome_programa):
+    def sys_create_process(self, nome_programa):
         """
         Responsável por criar um novo processo.
         - Deve gerar um PID único.
@@ -234,18 +231,32 @@ class Kernel:
         - Mudar o estado para PRONTO e inserir na fila de prontos.
         - Retorna o PID do novo processo ou -1 em caso de erro.
         """
+        # 
         # A EQUIPE 1 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        print(f"[Kernel] AINDA NÃO IMPLEMENTADO: Criar processo '{nome_programa}'.")
+        # 
         
-        # Exemplo básico para o bootstrap funcionar:
+        print(f"[Kernel] (Equipe 1) Criando processo '{nome_programa}'...")
+        
+        # Lógica de placeholder para o bootstrap funcionar:
         pid = self.proximo_pid
         self.proximo_pid += 1
-        processo_novo = processo(pid=pid, nome_programa=nome_programa, estado=EstadoProcesso.PRONTO)
-        self.tabela_de_processos[pid] = processo_novo
-        self.fila_de_prontos.append(processo_novo)
+        
+        # Futuramente, deve chamar self.sys_malloc() da Equipe 6
+        # endereco_memoria = self.sys_malloc(1024) # Ex: 1KB por processo
+        # if endereco_memoria == -1:
+        #    print(f"[Kernel] (Equipe 1) Falha ao alocar memória para o processo.")
+        #    return -1
+            
+        pcb = PCB(pid=pid, nome_programa=nome_programa, estado=EstadoProcesso.PRONTO)
+        # pcb.endereco_base_memoria = endereco_memoria
+        
+        self.tabela_de_processos[pid] = pcb
+        self.fila_de_prontos.append(pcb)
+        
+        print(f"[Kernel] (Equipe 1) Processo {pid} criado e pronto.")
         return pid
         
-    def encerrar_processo(self, pid):
+    def sys_terminate_process(self, pid):
         """
         Responsável por encerrar um processo.
         - Deve mudar o estado para TERMINADO.
@@ -253,127 +264,189 @@ class Kernel:
         - Remover o PCB de todas as estruturas do sistema.
         - Retorna True em caso de sucesso, False caso contrário.
         """
+        # 
         # A EQUIPE 1 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 1) AINDA NÃO IMPLEMENTADO: Encerrar processo {pid}.")
         pass
 
     # --- Equipe 2: Comunicação (Memória Compartilhada) ---
-    def criar_memoria_compartilhada(self, tamanho):
+    def sys_shm_create(self, tamanho):
         """
         Cria uma nova região de memória compartilhada.
         - Deve alocar um bloco na RAM (pode usar a função da Equipe 6).
         - Deve retornar uma chave/ID único para esta região.
         """
+        # 
         # A EQUIPE 2 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 2) AINDA NÃO IMPLEMENTADO: Criar memória compartilhada de {tamanho} bytes.")
         pass
 
     # --- Equipe 3: Comunicação (Troca de Mensagens) ---
-    def enviar_mensagem(self, dest_pid, mensagem):
+    def sys_msg_send(self, dest_pid, mensagem):
         """
         Envia uma mensagem para outro processo.
         - Deve localizar o buffer de mensagens do destinatário.
         - Adicionar a mensagem.
         - Se o destinatário estava bloqueado esperando, deve desbloqueá-lo.
         """
+        # 
         # A EQUIPE 3 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 3) AINDA NÃO IMPLEMENTADO: Enviar mensagem para {dest_pid}.")
         pass
     
-    def receber_mensagem(self, pid):
+    def sys_msg_receive(self, pid):
         """
         Recebe uma mensagem.
         - Se houver mensagem, retorna-a.
         - Se não, bloqueia o processo (muda estado, remove da fila de prontos).
         """
+        # 
         # A EQUIPE 3 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 3) AINDA NÃO IMPLEMENTADO: Receber mensagem para {pid}.")
         pass
 
     # --- Equipe 4: Criação e Encerramento de Threads ---
-    def criar_thread(self, pid, funcao_inicio):
+    def sys_create_thread(self, pid, funcao_inicio):
         """
         Cria uma nova thread dentro de um processo existente.
         - Deve gerar um TID único para o processo.
         - Criar e inicializar um TCB.
         - Adicionar o TCB à lista de threads do PCB e à fila de prontos do escalonador.
         """
+        # 
         # A EQUIPE 4 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 4) AINDA NÃO IMPLEMENTADO: Criar thread para o processo {pid}.")
         pass
 
     # --- Equipe 5: Escalonamento de Processos (Round-Robin) ---
-    def escalonamento_rr(self, processo_saindo, colocar_de_volta_na_fila):
+    def schedule_rr(self, processo_saindo, colocar_de_volta_na_fila):
         """
         Implementa o algoritmo de escalonamento Round-Robin.
-        - É chamado pelo loop principal a cada "instrução".
-        - Verifica se o quantum do processo atual acabou.
-        - Se sim, ou se o processo bloqueou/terminou, deve escolher o próximo da fila de prontos.
+        - É chamado pelo loop principal.
+        - Verifica se o quantum acabou ou se o processo bloqueou/terminou.
+        - Se sim, deve escolher o próximo da fila de prontos.
         - Retorna o PCB do próximo processo a ser executado.
         """
+        # 
         # A EQUIPE 5 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
         
-        # Código básico para o sistema rodar:
+        # Lógica de placeholder para o sistema rodar:
         if self.quantum_restante <= 0 or (processo_saindo and processo_saindo.estado != EstadoProcesso.EXECUCAO):
+            # O quantum acabou ou o processo não está mais em execução (bloqueou/terminou)
+            
+            # Se o processo que estava saindo ainda deve voltar para a fila
             if colocar_de_volta_na_fila:
+                print(f"[Kernel] (Equipe 5) Quantum expirou para PID {processo_saindo.pid}. Voltando para a fila.")
                 processo_saindo.estado = EstadoProcesso.PRONTO
                 self.fila_de_prontos.append(processo_saindo)
             
+            # Tenta pegar o próximo processo da fila
             if self.fila_de_prontos:
-                return self.fila_de_prontos.popleft()
+                proximo = self.fila_de_prontos.popleft()
+                print(f"[Kernel] (Equipe 5) Escalonador: Trocando para PID {proximo.pid}")
+                return proximo
             else:
-                return None # Nenhum processo pronto para executar
-        return processo_saindo # Continua executando o mesmo processo
+                # Ninguém na fila, CPU fica ociosa
+                print(f"[Kernel] (Equipe 5) Escalonador: Fila de prontos vazia. CPU ociosa.")
+                return None 
+        
+        # Se não for nenhuma das condições acima, o processo atual continua executando
+        return processo_saindo 
         
     # --- Equipe 6: Alocação e Liberação de Memória Física ---
-    def alocar_memoria(self, tamanho):
+    def sys_malloc(self, tamanho):
         """
         Aloca um bloco de memória contígua na RAM.
         - Deve implementar um algoritmo como First-Fit ou Best-Fit.
         - Gerenciar uma lista/mapa de blocos livres.
         - Retorna o endereço base do bloco alocado ou -1 se não houver espaço.
         """
+        # 
         # A EQUIPE 6 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        pass
+        # 
+        print(f"[Kernel] (Equipe 6) AINDA NÃO IMPLEMENTADO: Alocar {tamanho} bytes.")
+        return -1 # Retorna -1 para indicar falha
     
-    def liberar_memoria(self, endereco):
+    def sys_free(self, endereco):
         """
         Libera um bloco de memória.
         - Deve marcar o bloco como livre e tentar fundi-lo com vizinhos livres.
         """
+        # 
         # A EQUIPE 6 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 6) AINDA NÃO IMPLEMENTADO: Liberar memória no endereço {endereco}.")
         pass
     
     # --- Equipe 7: Gerenciamento de Memória Virtual ---
-    def traduzir_endereco_logico(self, pid, endereco_logico):
+    def vm_translate_address(self, pid, endereco_logico):
         """
         Traduz um endereço lógico de um processo para um endereço físico na RAM.
         - Deve usar a tabela de páginas do processo.
         - Simular um Page Fault se a página não estiver na memória.
         - Retorna o endereço físico correspondente.
         """
+        # 
         # A EQUIPE 7 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 7) AINDA NÃO IMPLEMENTADO: Traduzir endereço {endereco_logico} do PID {pid}.")
         pass
     
     # --- Equipe 8: Gerenciamento de Arquivos ---
-    def criar_arquivo(self, nome):
+    def sys_create_file(self, nome):
         """ Cria um arquivo vazio no disco. """
+        # 
         # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Criar arquivo {nome}.")
         pass
     
-    def escrever_em_arquivo(self, nome, dados):
+    def sys_write_file(self, nome, dados):
         """ Escreve dados em um arquivo. """
+        # 
         # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Escrever no arquivo {nome}.")
+        pass
+
+    def sys_read_file(self, nome):
+        """ Lê dados de um arquivo. """
+        # 
+        # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Ler o arquivo {nome}.")
+        pass
+        
+    def sys_delete_file(self, nome):
+        """ Exclui um arquivo do disco. """
+        # 
+        # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Deletar o arquivo {nome}.")
         pass
 
     # --- Equipe 9: Interpretador de Comandos ---
-    def interpretador_de_comandos(self, comando_str):
+    def shell_parse_and_execute(self, comando_str):
         """
         Interpreta um comando do usuário e chama a função de sistema correspondente.
         - Deve fazer o parsing da string de comando.
         - Chamar a função sys_* apropriada deste Kernel.
         - Retorna o resultado da operação para o usuário.
         """
+        # 
         # A EQUIPE 9 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print(f"[Kernel] (Equipe 9) AINDA NÃO IMPLEMENTADO: Interpretar comando '{comando_str}'.")
         pass
         
     # --- Equipe 10: Listagem de Processos (htop) ---
-    def listagem_de_processos(self):
+    def sys_htop(self):
         """
         Gera uma string formatada com a lista de todos os processos e seus estados.
         - Deve varrer a tabela de processos.
@@ -381,7 +454,10 @@ class Kernel:
         - Formatar tudo em uma única string legível, como uma tabela.
         - Retorna a string. Não deve usar print().
         """
+        # 
         # A EQUIPE 10 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # 
+        print("[Kernel] (Equipe 10) Gerando listagem de processos.")
         pass
 
 # ================================================================================
@@ -396,4 +472,7 @@ if __name__ == "__main__":
     kernel_so.bootstrap()
     
     # Inicia o loop principal de execução do SO
-    kernel_so.loop_principal()
+    try:
+        kernel_so.loop_principal()
+    except KeyboardInterrupt:
+        print("\n[Kernel] Simulação interrompida pelo usuário (Ctrl+C).")
