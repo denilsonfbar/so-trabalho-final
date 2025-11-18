@@ -386,18 +386,34 @@ class Kernel:
     
     # --- Equipe 7: Gerenciamento de Memória Virtual ---
     def vm_translate_address(self, pid, endereco_logico):
-        """
-        Traduz um endereço lógico de um processo para um endereço físico na RAM.
-        - Deve usar a tabela de páginas do processo.
-        - Simular um Page Fault se a página não estiver na memória.
-        - Retorna o endereço físico correspondente.
-        """
-        # 
-        # A EQUIPE 7 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        print(f"[Kernel] (Equipe 7) AINDA NÃO IMPLEMENTADO: Traduzir endereço {endereco_logico} do PID {pid}.")
-        pass
-    
+        # Define o tamanho da pagina
+        tamanho_pagina = TAMANHO_BLOCO_DISCO_BYTES
+
+        processo = self.tabela_de_processos.get(pid)
+        if processo is None:
+            print(f"[Kernel] (Equipe 7) Erro: Processo {pid} não encontrado para tradução de endereço.")
+            return -1
+        
+        numero_pagina = endereco_logico // tamanho_pagina
+        deslocamento = endereco_logico % tamanho_pagina
+
+        frame = processo.tabela_de_paginas.get(numero_pagina)
+
+        if frame is None:
+            print(f"[Kernel] (Equipe 7) Falha na tradução: Página {numero_pagina} não mapeada para o processo {pid}.")
+            
+            novo_frame = self.sys_malloc(tamanho_pagina)
+            if novo_frame == -1:
+                print(f"[Kernel] (Equipe 7) Falha ao alocar memória para página {numero_pagina} do processo {pid}.")
+                return -1
+            
+            processo.tabela_de_paginas[numero_pagina] = novo_frame
+            frame = novo_frame
+
+        endereco_fisico = (frame * tamanho_pagina) + deslocamento
+        print(f"[Kernel] (Equipe 7) Tradução: Lógico {endereco_logico} (P={numero_pagina}, D={deslocamento}) -> Físico {endereco_fisico} (Frame {frame}).")
+        return endereco_fisico
+
     # --- Equipe 8: Gerenciamento de Arquivos ---
     def sys_create_file(self, nome):
         """ Cria um arquivo vazio no disco. """
