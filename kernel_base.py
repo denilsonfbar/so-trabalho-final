@@ -393,7 +393,7 @@ class Kernel:
         - Retorna o endereço físico correspondente.
         """
         # 
-        # A EQUIPE 7 DEVE IMPLEMENTAR ESTA FUNÇÃO
+        # A EQUIPE 7 DEVE IMPLEMENTAR ESTA FUNÇÃO - >> Jefferson/Lucas
         # 
         print(f"[Kernel] (Equipe 7) AINDA NÃO IMPLEMENTADO: Traduzir endereço {endereco_logico} do PID {pid}.")
         pass
