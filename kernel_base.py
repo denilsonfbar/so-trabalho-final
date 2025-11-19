@@ -18,6 +18,8 @@ from enum import Enum
 from collections import deque
 from dataclasses import dataclass, field
 
+#Linha editada
+
 # ================================================================================
 # 1. CONSTANTES DE CONFIGURAÇÃO DO HARDWARE E DO KERNEL
 # ================================================================================
