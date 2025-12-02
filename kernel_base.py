@@ -170,6 +170,10 @@ class Kernel:
         # Módulos do SO (serão as funções implementadas pelas equipes)
         self.rodando = False
         print("[Kernel] Núcleo do SO inicializado.")
+
+        # Variáveis adicionais necessárias no __init__ do Kernel para a Equipe 8:
+        self.proximo_bloco_livre = 0
+        self.sistema_de_arquivos = {} 
     
     # --- Funções do Núcleo ---
     def bootstrap(self):
@@ -429,38 +433,96 @@ class Kernel:
         print(f"[Kernel] (Equipe 7) Tradução: Lógico {endereco_logico} (P={numero_pagina}, D={deslocamento}) -> Físico {endereco_fisico} (Frame {frame}).")
         return endereco_fisico
 
-    # --- Equipe 8: Gerenciamento de Arquivos ---
+    # --- Equipe 8: Gerenciamento de Arquivos --- 
+    def _alocar_blocos_disco(self, num_blocos):
+        """ Função auxiliar para encontrar e reservar blocos livres no disco. """
+        blocos_alocados = []
+        for _ in range(num_blocos):
+            if self.proximo_bloco_livre < self.disco.num_blocos:
+                blocos_alocados.append(self.proximo_bloco_livre)
+                self.proximo_bloco_livre += 1
+            else:
+                print("[Kernel] (Equipe 8) ERRO: Disco cheio. Falha na alocação.")
+                return []
+        return blocos_alocados
+    
     def sys_create_file(self, nome):
         """ Cria um arquivo vazio no disco. """
-        # 
-        # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Criar arquivo {nome}.")
-        pass
-    
+        if nome in self.sistema_de_arquivos:
+            print(f"[Kernel] (Equipe 8) ERRO: Arquivo '{nome}' já existe.")
+            return False
+            
+        print(f"[Kernel] (Equipe 8) Criando arquivo '{nome}'.")
+        self.sistema_de_arquivos[nome] = []
+        return True
+
     def sys_write_file(self, nome, dados):
         """ Escreve dados em um arquivo. """
-        # 
-        # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Escrever no arquivo {nome}.")
-        pass
+        if nome not in self.sistema_de_arquivos:
+            print(f"[Kernel] (Equipe 8) ERRO: Arquivo '{nome}' não encontrado para escrita.")
+            return False
+            
+        tamanho_bloco = self.disco.tamanho_bloco
+        num_blocos_necessarios = (len(dados) + tamanho_bloco - 1) // tamanho_bloco
+        
+        # 1. Libera os blocos antigos (se houver) para simplificar a realocação
+        print(f"[Kernel] (Equipe 8) Liberando blocos antigos do arquivo '{nome}'.")
+
+        self.sistema_de_arquivos[nome] = [] 
+
+        # 2. Aloca novos blocos no disco
+        blocos_alocados = self._alocar_blocos_disco(num_blocos_necessarios)
+        if not blocos_alocados:
+            return False # Falha na alocação
+
+        self.sistema_de_arquivos[nome] = blocos_alocados
+        
+        # 3. Escreve os dados nos blocos
+        for i, num_bloco in enumerate(blocos_alocados):
+            inicio = i * tamanho_bloco
+            fim = inicio + tamanho_bloco
+            dados_bloco = dados[inicio:fim]
+            self.disco.escrever_bloco(num_bloco, dados_bloco)
+            
+        print(f"[Kernel] (Equipe 8) Escrita de {len(dados)} bytes no arquivo '{nome}' concluída em {len(blocos_alocados)} blocos.")
+        return True
 
     def sys_read_file(self, nome):
         """ Lê dados de um arquivo. """
-        # 
-        # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Ler o arquivo {nome}.")
-        pass
+        if nome not in self.sistema_de_arquivos:
+            print(f"[Kernel] (Equipe 8) ERRO: Arquivo '{nome}' não encontrado para leitura.")
+            return None
+
+        blocos = self.sistema_de_arquivos[nome]
+        if not blocos:
+            print(f"[Kernel] (Equipe 8) Arquivo '{nome}' está vazio.")
+            return b'' # Retorna bytes vazios
+            
+        dados_completos = bytearray()
         
+        # 1. Lê os dados de cada bloco
+        for num_bloco in blocos:
+            dados_bloco = self.disco.ler_bloco(num_bloco)
+            dados_completos.extend(dados_bloco)
+            
+        print(f"[Kernel] (Equipe 8) Leitura de {len(dados_completos)} bytes do arquivo '{nome}' em {len(blocos)} blocos.")
+        
+        # Aqui, vamos retornar a bytearray completa.
+        return bytes(dados_completos)
+
     def sys_delete_file(self, nome):
         """ Exclui um arquivo do disco. """
-        # 
-        # A EQUIPE 8 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        print(f"[Kernel] (Equipe 8) AINDA NÃO IMPLEMENTADO: Deletar o arquivo {nome}.")
-        pass
+        if nome not in self.sistema_de_arquivos:
+            print(f"[Kernel] (Equipe 8) ERRO: Arquivo '{nome}' não encontrado para exclusão.")
+            return False
+            
+        blocos_liberados = len(self.sistema_de_arquivos[nome])
+        
+        # 1. Remove a entrada do sistema de arquivos
+        del self.sistema_de_arquivos[nome]
+        
+        print(f"[Kernel] (Equipe 8) Arquivo '{nome}' excluído. {blocos_liberados} blocos liberados.")
+        return True
 
     # --- Equipe 9: Interpretador de Comandos ---
     def shell_parse_and_execute(self, comando_str):
