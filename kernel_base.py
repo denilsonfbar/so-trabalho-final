@@ -588,3 +588,4 @@ if __name__ == "__main__":
         kernel_so.loop_principal()
     except KeyboardInterrupt:
         print("\n[Kernel] Simulação interrompida pelo usuário (Ctrl+C).")
+        
