@@ -11,7 +11,7 @@
     Cada equipe deve focar em implementar a sua função designada DENTRO desta
     classe Kernel, nos locais indicados com "A EQUIPE X DEVE IMPLEMENTAR...".
 """
-
+import threading
 import os
 import time
 from enum import Enum
@@ -355,28 +355,34 @@ class Kernel:
         # A EQUIPE 5 DEVE IMPLEMENTAR ESTA FUNÇÃO
         # 
         
-        # Lógica de placeholder para o sistema rodar:
-        if self.quantum_restante <= 0 or (processo_saindo and processo_saindo.estado != EstadoProcesso.EXECUCAO):
-            # O quantum acabou ou o processo não está mais em execução (bloqueou/terminou)
-            
-            # Se o processo que estava saindo ainda deve voltar para a fila
-            if colocar_de_volta_na_fila:
-                print(f"[Kernel] (Equipe 5) Quantum expirou para PID {processo_saindo.pid}. Voltando para a fila.")
-                processo_saindo.estado = EstadoProcesso.PRONTO
-                self.fila_de_prontos.append(processo_saindo)
-            
-            # Tenta pegar o próximo processo da fila
-            if self.fila_de_prontos:
-                proximo = self.fila_de_prontos.popleft()
-                print(f"[Kernel] (Equipe 5) Escalonador: Trocando para PID {proximo.pid}")
-                return proximo
-            else:
-                # Ninguém na fila, CPU fica ociosa
-                print(f"[Kernel] (Equipe 5) Escalonador: Fila de prontos vazia. CPU ociosa.")
-                return None 
+       # Equipe5: Escalonaor Round Robin
+def schedule_rr(self, processo_saindo, colocar_de_volta_na_fila):
+
+        tempo_acabou = self.quantum_restante <= 0
+        processo_parou = (processo_saindo and processo_saindo.estado != EstadoProcesso.EXECUCAO)
+        cpu_ociosa = (processo_saindo is None)
+
+        if not tempo_acabou and not processo_parou and not cpu_ociosa:
+            return None
+
+        if colocar_de_volta_na_fila and processo_saindo:
+            print(f"[SCHEDULER] Quantum expirou para PID {processo_saindo.pid}. Requisitando troca.")
+            processo_saindo.estado = EstadoProcesso.PRONTO
+            self.fila_de_prontos.append(processo_saindo)
+
+        if self.fila_de_prontos:
+            proximo = self.fila_de_prontos.popleft()
+            print(f"--- [SCHEDULER] Context Switch: PID {proximo.pid} assumindo CPU ---") 
+            return proximo
+
+        if processo_saindo and not colocar_de_volta_na_fila:
+            self.rodando = False
+            return None
+
+        if colocar_de_volta_na_fila:
+            return self.fila_de_prontos.popleft()
         
-        # Se não for nenhuma das condições acima, o processo atual continua executando
-        return processo_saindo 
+        return None
         
     # --- Equipe 6: Alocação e Liberação de Memória Física ---
     def sys_malloc(self, tamanho):
@@ -528,16 +534,76 @@ class Kernel:
     def shell_parse_and_execute(self, comando_str):
         """
         Interpreta um comando do usuário e chama a função de sistema correspondente.
-        - Deve fazer o parsing da string de comando.
-        - Chamar a função sys_* apropriada deste Kernel.
-        - Retorna o resultado da operação para o usuário.
         """
-        # 
-        # A EQUIPE 9 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        print(f"[Kernel] (Equipe 9) AINDA NÃO IMPLEMENTADO: Interpretar comando '{comando_str}'.")
-        pass
+        if not comando_str or comando_str.strip() == "":
+            return ""
 
+        # Divide o comando e argumentos (ex: "create programa1" -> ["create", "programa1"])
+        partes = comando_str.strip().split()
+        cmd = partes[0].lower()
+        args = partes[1:]
+
+        try:
+            # --- Comandos de Processos ---
+            if cmd == "create":
+                if len(args) < 1:
+                    return "Erro: Forneça o nome do programa. Ex: create <nome>"
+                pid = self.sys_create_process(args[0])
+                return f"Sucesso: Processo criado com PID {pid}."
+
+            elif cmd == "kill":
+                if len(args) < 1:
+                    return "Erro: Forneça o PID. Ex: kill <pid>"
+                pid = int(args[0])
+                # Chama a função da Equipe 1
+                self.sys_terminate_process(pid)
+                return f"Sinal de encerramento enviado para o processo {pid}."
+
+            elif cmd == "htop":
+                # Chama a função da Equipe 10
+                return self.sys_htop()
+
+            # --- Comandos de Memória (Teste Equipe 6) ---
+            elif cmd == "malloc":
+                if len(args) < 1:
+                    return "Erro: Forneça o tamanho. Ex: malloc <bytes>"
+                addr = self.sys_malloc(int(args[0]))
+                if addr == -1:
+                    return "Erro: Falha na alocação de memória (Sem espaço ou não implementado)."
+                return f"Sucesso: Memória alocada no endereço {addr}."
+
+            # --- Comandos de Arquivos (Teste Equipe 8) ---
+            elif cmd == "touch":
+                if len(args) < 1: return "Erro: Nome do arquivo necessário."
+                self.sys_create_file(args[0])
+                return f"Arquivo '{args[0]}' criado (se implementado pela Eq 8)."
+            
+            elif cmd == "rm":
+                if len(args) < 1: return "Erro: Nome do arquivo necessário."
+                self.sys_delete_file(args[0])
+                return f"Arquivo '{args[0]}' deletado (se implementado pela Eq 8)."
+
+            # --- Comandos do Sistema ---
+            elif cmd == "help":
+                return ("Comandos disponíveis:\n"
+                        "  create <nome>   - Cria um novo processo\n"
+                        "  kill <pid>      - Encerra um processo\n"
+                        "  htop            - Lista processos e status\n"
+                        "  malloc <tam>    - Aloca memória (teste)\n"
+                        "  touch <arq>     - Cria arquivo (teste)\n"
+                        "  shutdown        - Desliga o Kernel")
+
+            elif cmd == "shutdown" or cmd == "exit":
+                self.rodando = False
+                return "Sistema encerrando..."
+
+            else:
+                return f"Comando '{cmd}' não reconhecido. Digite 'help' para ajuda."
+
+        except ValueError:
+            return "Erro: Argumento inválido (esperava-se um número)."
+        except Exception as e:
+            return f"Erro inesperado no shell: {e}
         # --- Equipe 10: Listagem de Processos (htop) ---
     def sys_htop(self):
         """
@@ -576,17 +642,34 @@ class Kernel:
 # 5. PONTO DE ENTRADA PRINCIPAL DA SIMULAÇÃO
 # ================================================================================
 
+# Função auxiliar para rodar o shell em paralelo com o Kernel
+def terminal_shell(kernel):
+    print("\n[Shell] Terminal interativo iniciado. Digite 'help' para comandos.")
+    while kernel.rodando:
+        try:
+            # O input bloqueia esta thread, mas o kernel roda na thread principal
+            comando = input("user@os-simulado:~$ ")
+            resposta = kernel.shell_parse_and_execute(comando)
+            print(resposta)
+            if comando.strip() in ["shutdown", "exit"]:
+                break
+        except EOFError:
+            break
+
 if __name__ == "__main__":
-    # Cria o Kernel, que por sua vez inicializa todo o hardware
     kernel_so = Kernel()
-    
-    # Inicia o sistema operacional
     kernel_so.bootstrap()
-    
-    # Inicia o loop principal de execução do SO
+
+    # Cria uma thread para o Shell para que você possa digitar enquanto o SO roda
+    thread_shell = threading.Thread(target=terminal_shell, args=(kernel_so,))
+    thread_shell.start()
+
     try:
+        # O loop principal (CPU/Escalonador) roda na thread principal
         kernel_so.loop_principal()
     except KeyboardInterrupt:
-        print("\n[Kernel] Simulação interrompida pelo usuário (Ctrl+C).")
+        kernel_so.rodando = False
+        print("\n[Kernel] Forçando parada...")
+    
+    thread_shell.join()
 
-        
