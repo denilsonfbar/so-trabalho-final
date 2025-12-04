@@ -320,7 +320,8 @@ class Kernel:
         print(f"[Kernel] (Equipe 3) AINDA NÃO IMPLEMENTADO: Receber mensagem para {pid}.")
         pass
 
-        # --- Equipe 4: Criação e Encerramento de Threads ---
+
+    # --- Equipe 4: Criação e Encerramento de Threads ---
     def sys_create_thread(self, pid, funcao_inicio):
         """
         Cria uma nova thread dentro de um processo existente.
@@ -328,11 +329,6 @@ class Kernel:
         - Criar e inicializar um TCB.
         - Adicionar o TCB à lista de threads do PCB e à fila de prontos do escalonador.
         """
-        # 
-        # A EQUIPE 4 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        print(f"[Kernel] (Equipe 4) AINDA NÃO IMPLEMENTADO: Criar thread para o processo {pid}.")
-        pass
         if pid not in self.tabela_de_processos:
             print(f"[Kernel] Erro: Processo {pid} nao encontrado")
             return -1
