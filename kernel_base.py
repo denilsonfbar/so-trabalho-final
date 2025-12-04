@@ -166,6 +166,13 @@ class Kernel:
         self.fila_de_bloqueados = {}
         self.quantum_restante = QUANTUM_RR
         self.proximo_pid = 1 # PID 0 pode ser reservado para o 'init' ou 'idle'
+       
+        # --- NOVO: Estrutura para Gerenciamento de Memória (Equipe 6) ---
+        # Inicializa toda a RAM como um único bloco livre
+        # Formato: [(endereco_base, tamanho_bloco)]
+        self.memoria_livre_blocos = [(0, TAMANHO_RAM_BYTES)]
+        self.rodando = False
+        print("[Kernel] Núcleo do SO inicializado.")
 
         # Módulos do SO (serão as funções implementadas pelas equipes)
         self.rodando = False
@@ -387,28 +394,89 @@ def schedule_rr(self, processo_saindo, colocar_de_volta_na_fila):
     # --- Equipe 6: Alocação e Liberação de Memória Física ---
     def sys_malloc(self, tamanho):
         """
-        Aloca um bloco de memória contígua na RAM.
-        - Deve implementar um algoritmo como First-Fit ou Best-Fit.
+        Aloca um bloco de memória contígua na RAM usando First-Fit.
         - Gerenciar uma lista/mapa de blocos livres.
         - Retorna o endereço base do bloco alocado ou -1 se não houver espaço.
         """
         # 
         # A EQUIPE 6 DEVE IMPLEMENTAR ESTA FUNÇÃO
         # 
-        print(f"[Kernel] (Equipe 6) AINDA NÃO IMPLEMENTADO: Alocar {tamanho} bytes.")
+        if tamanho <= 0:
+            print("[Kernel] (Equipe 6) Erro: Tentativa de alocar tamanho não positivo.")
+            return -1
+
+        # 1. Procurar o primeiro bloco livre que caiba
+        for i, (endereco_base, tamanho_bloco) in enumerate(self.memoria_livre_blocos):
+
+            if tamanho_bloco >= tamanho:
+                # Bloco encontrado (First-Fit).
+
+                # 2. Remover o bloco completo da lista de livres
+                del self.memoria_livre_blocos[i]
+
+                sobra = tamanho_bloco - tamanho
+
+                if sobra > 0:
+                    # 3. Há sobra: Criar um novo bloco livre com a sobra
+                    novo_endereco_livre = endereco_base + tamanho
+                    novo_bloco_livre = (novo_endereco_livre, sobra)
+
+                    # Adicionar a sobra de volta à lista de livres
+                    self.memoria_livre_blocos.append(novo_bloco_livre)
+                    
+                    # Ordenar a lista para facilitar o sys_free (Coalescing)
+                    self.memoria_livre_blocos.sort(key=lambda x: x[0])
+
+                print(f"[Kernel] (Equipe 6) SUCESSO: Alocado endereço base {endereco_base} para {tamanho} bytes (Sobra: {sobra} bytes).")
+                return endereco_base
+        
+        # 4. Falha na alocação
+        print(f"[Kernel] (Equipe 6) FALHA: Não há bloco contíguo de {tamanho} bytes disponível.")
         return -1 # Retorna -1 para indicar falha
     
-    def sys_free(self, endereco):
+    def sys_free(self, endereco, tamanho):
         """
         Libera um bloco de memória.
-        - Deve marcar o bloco como livre e tentar fundi-lo com vizinhos livres.
+        - Deve marcar o bloco como livre e tentar fundi-lo com vizinhos livres (Coalescing).
         """
         # 
         # A EQUIPE 6 DEVE IMPLEMENTAR ESTA FUNÇÃO
         # 
-        print(f"[Kernel] (Equipe 6) AINDA NÃO IMPLEMENTADO: Liberar memória no endereço {endereco}.")
-        pass
-    
+        print(f"[Kernel] (Equipe 6) Liberando memória no endereço {endereco} com tamanho {tamanho}...")
+
+        if tamanho <= 0 or endereco == -1: 
+           print("[Kernel] (Equipe 6) Aviso: Tentativa de liberar bloco inválido.")
+           return
+          
+        # 1. Adiciona o bloco recém-liberado à lista
+        self.memoria_livre_blocos.append((endereco, tamanho))
+      
+        # 2. Ordena a lista de blocos livres pelo endereço base para facilitar a fusão
+        self.memoria_livre_blocos.sort(key=lambda x: x[0])
+      
+        # 3. Tenta fundir blocos vizinhos (Coalescing)
+        nova_lista_livre = []
+        if self.memoria_livre_blocos:
+            # Converte a primeira tupla para lista para permitir a alteração do tamanho
+            bloco_atual = list(self.memoria_livre_blocos[0])
+          
+            for i in range(1, len(self.memoria_livre_blocos)):
+                proximo_endereco, proximo_tamanho = self.memoria_livre_blocos[i]
+              
+                # Verifica se o fim do bloco atual é contíguo ao início do próximo bloco
+                if bloco_atual[0] + bloco_atual[1] == proximo_endereco:
+                    # Fusão: Aumenta o tamanho do bloco atual
+                    bloco_atual[1] += proximo_tamanho
+                else:
+                    # Não são contíguos: Salva o bloco atual fundido e começa a analisar o próximo
+                    nova_lista_livre.append(tuple(bloco_atual))
+                    bloco_atual = list(self.memoria_livre_blocos[i])
+          
+            # Adiciona o último bloco processado
+            nova_lista_livre.append(tuple(bloco_atual))
+          
+        self.memoria_livre_blocos = nova_lista_livre
+        print(f"[Kernel] (Equipe 6) Memória liberada e blocos livres fundidos. Blocos restantes: {len(self.memoria_livre_blocos)}.")
     # --- Equipe 7: Gerenciamento de Memória Virtual ---
     def vm_translate_address(self, pid, endereco_logico):
         # Define o tamanho da pagina
