@@ -466,8 +466,16 @@ class Kernel:
           
         self.memoria_livre_blocos = nova_lista_livre
         print(f"[Kernel] (Equipe 6) Memória liberada e blocos livres fundidos. Blocos restantes: {len(self.memoria_livre_blocos)}.")
+
+
     # --- Equipe 7: Gerenciamento de Memória Virtual ---
     def vm_translate_address(self, pid, endereco_logico):
+        """
+        Traduz um endereço lógico de um processo para um endereço físico na RAM.
+        - Deve usar a tabela de páginas do processo.
+        - Simular um Page Fault se a página não estiver na memória.
+        - Retorna o endereço físico correspondente.
+        """
         # Define o tamanho da pagina
         tamanho_pagina = TAMANHO_BLOCO_DISCO_BYTES
 
@@ -587,10 +595,14 @@ class Kernel:
         print(f"[Kernel] (Equipe 8) Arquivo '{nome}' excluído. {blocos_liberados} blocos liberados.")
         return True
 
+
     # --- Equipe 9: Interpretador de Comandos ---
     def shell_parse_and_execute(self, comando_str):
         """
         Interpreta um comando do usuário e chama a função de sistema correspondente.
+        - Deve fazer o parsing da string de comando.
+        - Chamar a função sys_* apropriada deste Kernel.
+        - Retorna o resultado da operação para o usuário.
         """
         if not comando_str or comando_str.strip() == "":
             return ""
@@ -667,6 +679,10 @@ class Kernel:
     def sys_htop(self):
         """
         Gera uma string formatada com a lista de todos os processos e seus estados.
+        - Deve varrer a tabela de processos.
+        - Para cada processo, coletar PID, nome, estado, etc.
+        - Formatar tudo em uma única string legível, como uma tabela.
+        - Retorna a string. Não deve usar print().
         """
         print("[Kernel] (Equipe 10) Gerando listagem de processos.")
 
@@ -731,4 +747,3 @@ if __name__ == "__main__":
         print("\n[Kernel] Forçando parada...")
     
     thread_shell.join()
-
