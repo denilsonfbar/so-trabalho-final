@@ -358,13 +358,6 @@ class Kernel:
         - Se sim, deve escolher o próximo da fila de prontos.
         - Retorna o PCB do próximo processo a ser executado.
         """
-        # 
-        # A EQUIPE 5 DEVE IMPLEMENTAR ESTA FUNÇÃO
-        # 
-        
-       # Equipe5: Escalonaor Round Robin
-def schedule_rr(self, processo_saindo, colocar_de_volta_na_fila):
-
         tempo_acabou = self.quantum_restante <= 0
         processo_parou = (processo_saindo and processo_saindo.estado != EstadoProcesso.EXECUCAO)
         cpu_ociosa = (processo_saindo is None)
