@@ -664,8 +664,10 @@ class Kernel:
         except ValueError:
             return "Erro: Argumento inválido (esperava-se um número)."
         except Exception as e:
-            return f"Erro inesperado no shell: {e}
-        # --- Equipe 10: Listagem de Processos (htop) ---
+            return f"Erro inesperado no shell: {e}"
+
+
+    # --- Equipe 10: Listagem de Processos (htop) ---
     def sys_htop(self):
         """
         Gera uma string formatada com a lista de todos os processos e seus estados.
