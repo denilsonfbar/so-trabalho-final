@@ -610,3 +610,4 @@ if __name__ == "__main__":
         print("\n[Kernel] Forçando parada...")
     
     thread_shell.join()
+
